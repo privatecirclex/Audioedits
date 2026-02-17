@@ -94,7 +94,7 @@
                 <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                     <div id="progressBar" class="loader-bar h-2.5 rounded-full" style="width: 0%"></div>
                 </div>
-                <p class="text-xs text-slate-400 mt-2 text-center">First run may take a moment to download the model (~40MB).</p>
+                <p class="text-xs text-slate-400 mt-2 text-center">First run may take a moment to download the model (~80MB).</p>
             </div>
         </div>
 
@@ -141,8 +141,7 @@
 
         // --- Configuration ---
         env.allowLocalModels = false; // Force CDN download
-        const MODEL_NAME = 'Xenova/whisper-tiny';
-
+        const MODEL_NAME = 'Xenova/whisper-base';
         // --- State ---
         let wavesurfer;
         let wsRegions;
@@ -219,57 +218,92 @@
 
         // --- Core Logic ---
 
-        async function handleFile(file) {
-            audioBlob = file;
-            
-            // UI: Switch to loading state
-            els.dropZone.classList.add('hidden');
-            els.progressContainer.classList.remove('hidden');
-            
-            try {
-                // Step 1: Initialize WaveSurfer (Visuals)
-                initWaveSurfer(file);
+// Helper to update the bar nicely
+function updateProgress(percent, message, isPulse = false) {
+    els.progressBar.style.width = `${percent}%`;
+    els.percentText.innerText = `${Math.floor(percent)}%`;
+    els.statusText.innerText = message;
+    
+    if (isPulse) {
+        els.progressBar.classList.add('animate-pulse');
+    } else {
+        els.progressBar.classList.remove('animate-pulse');
+    }
+}
 
-                // Step 2: Run AI Transcription
-                els.statusText.innerText = "Loading AI Model (Whisper)...";
+async function handleFile(file) {
+    audioBlob = file;
+    
+    // UI: Switch to loading state
+    els.dropZone.classList.add('hidden');
+    els.progressContainer.classList.remove('hidden');
+    
+    try {
+        // Step 1: Initialize Visuals (Waveform)
+        updateProgress(5, "Initializing Waveform...");
+        initWaveSurfer(file);
+
+        // Step 2: Initialize AI (This triggers the Download)
+        // We use a specific callback to track the DOWNLOAD progress
+        const transcriber = await pipeline('automatic-speech-recognition', MODEL_NAME, {
+            progress_callback: (data) => {
+                // 'initiate' means starting a download
+                // 'progress' means downloading a chunk
+                // 'done' means file downloaded
                 
-                const transcriber = await pipeline('automatic-speech-recognition', MODEL_NAME, {
-                    progress_callback: (data) => {
-                        if (data.status === 'progress') {
-                            const pct = Math.round(data.progress * 100);
-                            els.progressBar.style.width = `${pct}%`;
-                            els.percentText.innerText = `${pct}%`;
-                        }
-                    }
-                });
-
-                els.statusText.innerText = "Transcribing audio... (This may take a moment)";
-                els.progressBar.classList.add('animate-pulse'); // Indeterminate state
-                
-                // Convert audio file to float32 array for Transformers.js
-                const audioData = await readAudio(file);
-                
-                // Transcribe
-                const output = await transcriber(audioData, {
-                    chunk_length_s: 30,
-                    stride_length_s: 5,
-                    return_timestamps: true
-                });
-
-                // Step 3: Process Data
-                processTranscription(output);
-
-                // Step 4: Switch UI
-                els.uploadView.classList.add('hidden');
-                els.workspaceView.classList.remove('hidden');
-                els.workspaceView.classList.remove('opacity-0');
-
-            } catch (err) {
-                console.error(err);
-                alert("Error during transcription: " + err.message);
-                location.reload();
+                if (data.status === 'progress') {
+                    // Check if we are downloading the model files (shard, tokenizer, etc.)
+                    // Map 0-100 progress of download to 10%-90% of our bar
+                    const downloadPct = data.progress; // ranges 0 to 100
+                    const barWidth = 10 + (downloadPct * 0.8); // Scale to fit inside 10-90% range
+                    
+                    updateProgress(barWidth, `Downloading AI Brain... (${Math.floor(downloadPct)}%)`);
+                }
+                if (data.status === 'done') {
+                    updateProgress(90, "AI Model Ready!");
+                }
             }
-        }
+        });
+
+        // Step 3: Prepare Audio (Short pause to let UI render)
+        updateProgress(92, "Reading Audio File...");
+        await new Promise(resolve => setTimeout(resolve, 100)); // Breather
+        
+        const audioData = await readAudio(file);
+
+        // Step 4: Transcribe (The "Stuck" Phase)
+        // Since we can't track exact progress of the *thinking*, we switch to Pulse
+        updateProgress(95, "AI is listening... (This freezes your screen)", true);
+        
+        // Another breather before the heavy freeze
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const output = await transcriber(audioData, {
+            chunk_length_s: 30,
+            stride_length_s: 5,
+            return_timestamps: true
+        });
+
+        // Step 5: Done
+        updateProgress(100, "Done!", false);
+        
+        // Process Data
+        processTranscription(output);
+
+        // Switch UI
+        setTimeout(() => {
+            els.uploadView.classList.add('hidden');
+            els.workspaceView.classList.remove('hidden');
+            els.workspaceView.classList.remove('opacity-0');
+        }, 500);
+
+    } catch (err) {
+        console.error(err);
+        alert("Error: " + err.message);
+        location.reload();
+    }
+}
+
 
         function initWaveSurfer(file) {
             wavesurfer = WaveSurfer.create({
