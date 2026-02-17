@@ -173,6 +173,7 @@
         // --- Initialization & Event Listeners ---
         
         // 1. Drag & Drop
+        els.fileInput.addEventListener('click', (e) => e.stopPropagation()); // <--- ADD THIS LINE
         els.dropZone.addEventListener('click', () => els.fileInput.click());
         els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); els.dropZone.classList.add('border-brand-orange'); });
         els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('border-brand-orange'));
