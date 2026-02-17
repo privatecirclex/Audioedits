@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LyricsAI - Client-Side Sync Tool</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            yellow: '#F59E0B',
+                            orange: '#F97316',
+                            red: '#EF4444',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+        /* Karaoke Active State Animation */
+        .karaoke-line { transition: all 0.3s ease; opacity: 0.5; transform: scale(1); }
+        .karaoke-line.active { 
+            opacity: 1; 
+            transform: scale(1.05);
+            background: linear-gradient(to right, #F59E0B, #EF4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+
+        /* Loader Animation */
+        .loader-bar {
+            background: linear-gradient(90deg, #F59E0B, #F97316, #EF4444);
+            background-size: 200% 200%;
+            animation: gradientMove 2s ease infinite;
+        }
+        @keyframes gradientMove { 
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
+
+    <header class="flex-none h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-white z-10">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-wave-square text-brand-orange text-xl"></i>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900">Lyrics<span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange to-brand-red">AI</span></h1>
+        </div>
+        <button id="exportBtn" class="bg-gradient-to-r from-brand-yellow via-brand-orange to-brand-red text-white px-5 py-2 rounded-lg font-medium shadow-md shadow-orange-100 hover:shadow-lg hover:shadow-orange-200 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fa-solid fa-download mr-2"></i> Export .LRC
+        </button>
+    </header>
+
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+        
+        <div id="uploadView" class="absolute inset-0 z-20 bg-white flex flex-col items-center justify-center p-6 transition-opacity duration-500">
+            <div id="dropZone" class="w-full max-w-2xl border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center hover:border-brand-orange hover:bg-orange-50 transition-colors cursor-pointer group">
+                <div class="w-16 h-16 bg-orange-100 text-brand-orange rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <i class="fa-solid fa-cloud-upload-alt text-2xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">Upload Audio</h2>
+                <p class="text-slate-500 mb-6">Drag & drop your song (MP3, WAV) to start AI transcription.</p>
+                <input type="file" id="fileInput" class="hidden" accept="audio/*">
+                <button class="px-6 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium hover:border-brand-orange hover:text-brand-orange transition-colors">
+                    Select File
+                </button>
+            </div>
+
+            <div id="progressContainer" class="hidden mt-8 w-full max-w-md">
+                <div class="flex justify-between text-sm font-medium text-slate-600 mb-2">
+                    <span id="statusText">Initializing AI Model...</span>
+                    <span id="percentText">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div id="progressBar" class="loader-bar h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <p class="text-xs text-slate-400 mt-2 text-center">First run may take a moment to download the model (~40MB).</p>
+            </div>
+        </div>
+
+        <div id="workspaceView" class="flex-1 flex flex-col hidden opacity-0 transition-opacity duration-500 h-full">
+            
+            <div class="bg-white border-b border-slate-100 p-4 shadow-sm flex-none z-10">
+                <div class="flex items-center justify-center gap-4 mb-4">
+                    <button id="playPauseBtn" class="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-slate-700 transition-colors">
+                        <i class="fa-solid fa-play"></i>
+                    </button>
+                    <div class="text-sm font-mono text-slate-500" id="timeDisplay">00:00 / 00:00</div>
+                </div>
+                <div id="waveform" class="w-full"></div>
+            </div>
+
+            <div class="flex justify-center border-b border-slate-100 bg-white">
+                <button data-tab="editor" class="tab-btn active px-6 py-3 text-sm font-medium border-b-2 border-brand-orange text-brand-orange">
+                    <i class="fa-solid fa-pen-to-square mr-2"></i> Editor
+                </button>
+                <button data-tab="preview" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+                    <i class="fa-solid fa-microphone-lines mr-2"></i> Karaoke Preview
+                </button>
+            </div>
+
+            <div class="flex-1 relative bg-slate-50 overflow-hidden">
+                
+                <div id="editorView" class="absolute inset-0 overflow-y-auto p-4 pb-20">
+                    <div id="transcriptList" class="max-w-4xl mx-auto space-y-3">
+                        </div>
+                </div>
+
+                <div id="previewView" class="absolute inset-0 hidden bg-white flex flex-col items-center justify-center p-8 text-center overflow-y-auto">
+                    <div id="karaokeDisplay" class="space-y-6 max-w-3xl w-full">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.0';
+        import WaveSurfer from 'https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js';
+        import RegionsPlugin from 'https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.esm.js';
+
+        // --- Configuration ---
+        env.allowLocalModels = false; // Force CDN download
+        const MODEL_NAME = 'Xenova/whisper-tiny';
+
+        // --- State ---
+        let wavesurfer;
+        let wsRegions;
+        let transcriptData = []; // { start, end, text, regionId }
+        let isPlaying = false;
+        let audioBlob = null;
+
+        // --- DOM Elements ---
+        const els = {
+            dropZone: document.getElementById('dropZone'),
+            fileInput: document.getElementById('fileInput'),
+            uploadView: document.getElementById('uploadView'),
+            workspaceView: document.getElementById('workspaceView'),
+            progressContainer: document.getElementById('progressContainer'),
+            progressBar: document.getElementById('progressBar'),
+            statusText: document.getElementById('statusText'),
+            percentText: document.getElementById('percentText'),
+            waveform: document.getElementById('waveform'),
+            playPauseBtn: document.getElementById('playPauseBtn'),
+            timeDisplay: document.getElementById('timeDisplay'),
+            transcriptList: document.getElementById('transcriptList'),
+            karaokeDisplay: document.getElementById('karaokeDisplay'),
+            tabBtns: document.querySelectorAll('.tab-btn'),
+            editorView: document.getElementById('editorView'),
+            previewView: document.getElementById('previewView'),
+            exportBtn: document.getElementById('exportBtn')
+        };
+
+        // --- Initialization & Event Listeners ---
+        
+        // 1. Drag & Drop
+        els.dropZone.addEventListener('click', () => els.fileInput.click());
+        els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); els.dropZone.classList.add('border-brand-orange'); });
+        els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('border-brand-orange'));
+        els.dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.remove('border-brand-orange');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        els.fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        // 2. Tabs
+        els.tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // UI Toggle
+                els.tabBtns.forEach(b => {
+                    b.classList.remove('border-brand-orange', 'text-brand-orange');
+                    b.classList.add('border-transparent', 'text-slate-500');
+                });
+                btn.classList.remove('border-transparent', 'text-slate-500');
+                btn.classList.add('border-brand-orange', 'text-brand-orange');
+
+                // View Toggle
+                const target = btn.dataset.tab;
+                if (target === 'editor') {
+                    els.editorView.classList.remove('hidden');
+                    els.previewView.classList.add('hidden');
+                } else {
+                    els.editorView.classList.add('hidden');
+                    els.previewView.classList.remove('hidden');
+                    renderPreview(); // Refresh preview text
+                }
+            });
+        });
+
+        // 3. Playback
+        els.playPauseBtn.addEventListener('click', () => wavesurfer.playPause());
+
+        // 4. Export
+        els.exportBtn.addEventListener('click', exportLRC);
+
+
+        // --- Core Logic ---
+
+        async function handleFile(file) {
+            audioBlob = file;
+            
+            // UI: Switch to loading state
+            els.dropZone.classList.add('hidden');
+            els.progressContainer.classList.remove('hidden');
+            
+            try {
+                // Step 1: Initialize WaveSurfer (Visuals)
+                initWaveSurfer(file);
+
+                // Step 2: Run AI Transcription
+                els.statusText.innerText = "Loading AI Model (Whisper)...";
+                
+                const transcriber = await pipeline('automatic-speech-recognition', MODEL_NAME, {
+                    progress_callback: (data) => {
+                        if (data.status === 'progress') {
+                            const pct = Math.round(data.progress * 100);
+                            els.progressBar.style.width = `${pct}%`;
+                            els.percentText.innerText = `${pct}%`;
+                        }
+                    }
+                });
+
+                els.statusText.innerText = "Transcribing audio... (This may take a moment)";
+                els.progressBar.classList.add('animate-pulse'); // Indeterminate state
+                
+                // Convert audio file to float32 array for Transformers.js
+                const audioData = await readAudio(file);
+                
+                // Transcribe
+                const output = await transcriber(audioData, {
+                    chunk_length_s: 30,
+                    stride_length_s: 5,
+                    return_timestamps: true
+                });
+
+                // Step 3: Process Data
+                processTranscription(output);
+
+                // Step 4: Switch UI
+                els.uploadView.classList.add('hidden');
+                els.workspaceView.classList.remove('hidden');
+                els.workspaceView.classList.remove('opacity-0');
+
+            } catch (err) {
+                console.error(err);
+                alert("Error during transcription: " + err.message);
+                location.reload();
+            }
+        }
+
+        function initWaveSurfer(file) {
+            wavesurfer = WaveSurfer.create({
+                container: els.waveform,
+                waveColor: '#fed7aa', // Light orange
+                progressColor: '#ef4444', // Red
+                cursorColor: '#f97316',
+                barWidth: 2,
+                barRadius: 3,
+                height: 120,
+                normalize: true,
+            });
+
+            wsRegions = wavesurfer.registerPlugin(RegionsPlugin.create());
+
+            wavesurfer.loadBlob(file);
+
+            wavesurfer.on('ready', () => {
+                const dur = wavesurfer.getDuration();
+                els.timeDisplay.innerText = `00:00 / ${formatTime(dur)}`;
+            });
+
+            wavesurfer.on('audioprocess', (currentTime) => {
+                els.timeDisplay.innerText = `${formatTime(currentTime)} / ${formatTime(wavesurfer.getDuration())}`;
+                updatePreviewActiveState(currentTime);
+            });
+
+            wavesurfer.on('play', () => {
+                isPlaying = true;
+                els.playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+            });
+
+            wavesurfer.on('pause', () => {
+                isPlaying = false;
+                els.playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+            });
+
+            // Region Events for Sync
+            wsRegions.on('region-updated', (region) => {
+                // Find data index
+                const index = transcriptData.findIndex(t => t.regionId === region.id);
+                if (index !== -1) {
+                    // Update Data
+                    transcriptData[index].start = region.start;
+                    transcriptData[index].end = region.end;
+                    // Update Input UI
+                    updateInputRow(index);
+                }
+            });
+            
+            // Click region to play
+            wsRegions.on('region-clicked', (region, e) => {
+                e.stopPropagation();
+                region.play();
+            });
+        }
+
+        function processTranscription(output) {
+            // Whisper 'chunks' usually contain { text, timestamp: [start, end] }
+            // Note: whisper-tiny sometimes returns null end timestamps for last chunk.
+            
+            const chunks = output.chunks || [];
+            
+            transcriptData = chunks.map((chunk, i) => {
+                // Safety check for timestamps
+                let start = chunk.timestamp[0];
+                let end = chunk.timestamp[1];
+                
+                if (end === null) end = start + 2.0; // Fallback duration
+
+                const regionId = `region-${i}`;
+
+                // Create Visual Region
+                wsRegions.addRegion({
+                    id: regionId,
+                    start: start,
+                    end: end,
+                    content: '', // Can add text here if desired
+                    color: 'rgba(249, 115, 22, 0.2)', // Orange transparent
+                    drag: true,
+                    resize: true
+                });
+
+                return {
+                    id: i,
+                    regionId: regionId,
+                    start: start,
+                    end: end,
+                    text: chunk.text.trim()
+                };
+            });
+
+            renderEditor();
+        }
+
+        // --- Editor UI Logic ---
+
+        function renderEditor() {
+            els.transcriptList.innerHTML = '';
+            
+            transcriptData.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = "flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow group";
+                row.innerHTML = `
+                    <div class="flex flex-col gap-1 w-24 flex-none">
+                        <input type="number" step="0.1" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-1 text-slate-600 focus:outline-none focus:border-brand-orange" 
+                            id="start-${index}" value="${item.start.toFixed(2)}">
+                        <input type="number" step="0.1" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-1 text-slate-600 focus:outline-none focus:border-brand-orange" 
+                            id="end-${index}" value="${item.end.toFixed(2)}">
+                    </div>
+                    <div class="flex-1">
+                        <input type="text" class="w-full text-base text-slate-800 font-medium placeholder-slate-300 focus:outline-none border-b border-transparent focus:border-brand-orange pb-1 transition-colors bg-transparent"
+                            id="text-${index}" value="${item.text}">
+                    </div>
+                    <button class="w-8 h-8 rounded-full bg-orange-50 text-brand-orange flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-brand-orange hover:text-white"
+                        onclick="window.playSegment('${item.regionId}')">
+                        <i class="fa-solid fa-play text-xs"></i>
+                    </button>
+                `;
+                
+                els.transcriptList.appendChild(row);
+
+                // Bind Events
+                const startInput = document.getElementById(`start-${index}`);
+                const endInput = document.getElementById(`end-${index}`);
+                const textInput = document.getElementById(`text-${index}`);
+
+                // Inputs -> Region/Data
+                const updateRegionFromInput = () => {
+                    const s = parseFloat(startInput.value);
+                    const e = parseFloat(endInput.value);
+                    const t = textInput.value;
+
+                    // Update Data
+                    transcriptData[index].start = s;
+                    transcriptData[index].end = e;
+                    transcriptData[index].text = t;
+
+                    // Update Region
+                    const region = wsRegions.getRegions().find(r => r.id === item.regionId);
+                    if (region) {
+                        region.setOptions({ start: s, end: e });
+                    }
+                };
+
+                startInput.addEventListener('change', updateRegionFromInput);
+                endInput.addEventListener('change', updateRegionFromInput);
+                textInput.addEventListener('input', () => {
+                    transcriptData[index].text = textInput.value;
+                });
+            });
+        }
+
+        function updateInputRow(index) {
+            const item = transcriptData[index];
+            const startInput = document.getElementById(`start-${index}`);
+            const endInput = document.getElementById(`end-${index}`);
+            
+            if (startInput && endInput) {
+                startInput.value = item.start.toFixed(2);
+                endInput.value = item.end.toFixed(2);
+            }
+        }
+
+        // Global helper for the play button in HTML
+        window.playSegment = (regionId) => {
+            const region = wsRegions.getRegions().find(r => r.id === regionId);
+            if(region) region.play();
+        };
+
+        // --- Preview Logic ---
+
+        function renderPreview() {
+            els.karaokeDisplay.innerHTML = '';
+            transcriptData.forEach((item, index) => {
+                const p = document.createElement('p');
+                p.className = `karaoke-line text-2xl md:text-3xl text-slate-400 font-medium cursor-pointer py-2`;
+                p.id = `karaoke-${index}`;
+                p.innerText = item.text;
+                p.onclick = () => {
+                    wavesurfer.setTime(item.start);
+                    wavesurfer.play();
+                };
+                els.karaokeDisplay.appendChild(p);
+            });
+        }
+
+        function updatePreviewActiveState(currentTime) {
+            // Only update if preview is visible
+            if (els.previewView.classList.contains('hidden')) return;
+
+            transcriptData.forEach((item, index) => {
+                const el = document.getElementById(`karaoke-${index}`);
+                if (!el) return;
+
+                if (currentTime >= item.start && currentTime <= item.end) {
+                    if (!el.classList.contains('active')) {
+                        el.classList.add('active');
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+        }
+
+        // --- Utilities ---
+
+        function exportLRC() {
+            let content = '';
+            transcriptData.forEach(line => {
+                content += `[${formatTimeLRC(line.start)}]${line.text}\n`;
+            });
+
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'lyrics.lrc';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Audio helper for Transformers.js
+        async function readAudio(file) {
+            const audioContext = new AudioContext({ sampleRate: 16000 });
+            const arrayBuffer = await file.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            return audioBuffer.getChannelData(0);
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function formatTimeLRC(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 100);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+        }
+    </script>
+</body>
+</html>
