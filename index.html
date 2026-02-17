@@ -57,6 +57,11 @@
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+        
+        /* Fix for scroll areas */
+        .scroll-container {
+            scrollbar-gutter: stable;
+        }
     </style>
 </head>
 <body class="bg-white text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
@@ -66,22 +71,22 @@
             <i class="fa-solid fa-wave-square text-brand-orange text-xl"></i>
             <h1 class="text-xl font-bold tracking-tight text-slate-900">Lyrics<span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange to-brand-red">AI</span></h1>
         </div>
-        <button id="exportBtn" class="bg-gradient-to-r from-brand-yellow via-brand-orange to-brand-red text-white px-5 py-2 rounded-lg font-medium shadow-md shadow-orange-100 hover:shadow-lg hover:shadow-orange-200 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button id="exportBtn" class="bg-gradient-to-r from-brand-yellow via-brand-orange to-brand-red text-white px-5 py-2 rounded-lg font-medium shadow-md shadow-orange-100 hover:shadow-lg hover:shadow-orange-200 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
             <i class="fa-solid fa-download mr-2"></i> Export .LRC
         </button>
     </header>
 
     <main class="flex-1 flex flex-col relative overflow-hidden">
         
-        <div id="uploadView" class="absolute inset-0 z-20 bg-white flex flex-col items-center justify-center p-6 transition-opacity duration-500">
+        <div id="uploadView" class="absolute inset-0 z-20 bg-white flex flex-col items-center justify-center p-6 transition-all duration-500">
             <div id="dropZone" class="w-full max-w-2xl border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center hover:border-brand-orange hover:bg-orange-50 transition-colors cursor-pointer group">
-                <div class="w-16 h-16 bg-orange-100 text-brand-orange rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                <div class="w-16 h-16 bg-orange-100 text-brand-orange rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform pointer-events-none">
                     <i class="fa-solid fa-cloud-upload-alt text-2xl"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-slate-800 mb-2">Upload Audio</h2>
-                <p class="text-slate-500 mb-6">Drag & drop your song (MP3, WAV) to start AI transcription.</p>
+                <h2 class="text-2xl font-bold text-slate-800 mb-2 pointer-events-none">Upload Audio</h2>
+                <p class="text-slate-500 mb-6 pointer-events-none">Drag & drop your song (MP3, WAV) to start AI transcription.</p>
                 <input type="file" id="fileInput" class="hidden" accept="audio/*">
-                <button class="px-6 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium hover:border-brand-orange hover:text-brand-orange transition-colors">
+                <button type="button" id="selectBtn" class="px-6 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium hover:border-brand-orange hover:text-brand-orange transition-colors">
                     Select File
                 </button>
             </div>
@@ -94,7 +99,7 @@
                 <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                     <div id="progressBar" class="loader-bar h-2.5 rounded-full" style="width: 0%"></div>
                 </div>
-                <p class="text-xs text-slate-400 mt-2 text-center">First run may take a moment to download the model (~80MB).</p>
+                <p class="text-xs text-slate-400 mt-4 text-center">First run downloads the model (~80MB). Processing happens entirely on your device.</p>
             </div>
         </div>
 
@@ -102,32 +107,31 @@
             
             <div class="bg-white border-b border-slate-100 p-4 shadow-sm flex-none z-10">
                 <div class="flex items-center justify-center gap-4 mb-4">
-                    <button id="playPauseBtn" class="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-slate-700 transition-colors">
+                    <button id="playPauseBtn" class="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-slate-700 transition-colors focus:ring-2 focus:ring-brand-orange focus:ring-offset-2">
                         <i class="fa-solid fa-play"></i>
                     </button>
-                    <div class="text-sm font-mono text-slate-500" id="timeDisplay">00:00 / 00:00</div>
+                    <div class="text-sm font-mono text-slate-500 bg-slate-50 px-3 py-1 rounded border border-slate-100" id="timeDisplay">00:00 / 00:00</div>
                 </div>
                 <div id="waveform" class="w-full"></div>
             </div>
 
             <div class="flex justify-center border-b border-slate-100 bg-white">
-                <button data-tab="editor" class="tab-btn active px-6 py-3 text-sm font-medium border-b-2 border-brand-orange text-brand-orange">
+                <button data-tab="editor" class="tab-btn active px-6 py-3 text-sm font-medium border-b-2 border-brand-orange text-brand-orange transition-all">
                     <i class="fa-solid fa-pen-to-square mr-2"></i> Editor
                 </button>
-                <button data-tab="preview" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700">
+                <button data-tab="preview" class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all">
                     <i class="fa-solid fa-microphone-lines mr-2"></i> Karaoke Preview
                 </button>
             </div>
 
             <div class="flex-1 relative bg-slate-50 overflow-hidden">
-                
-                <div id="editorView" class="absolute inset-0 overflow-y-auto p-4 pb-20">
+                <div id="editorView" class="absolute inset-0 overflow-y-auto p-4 pb-24 scroll-container">
                     <div id="transcriptList" class="max-w-4xl mx-auto space-y-3">
                         </div>
                 </div>
 
-                <div id="previewView" class="absolute inset-0 hidden bg-white flex flex-col items-center justify-center p-8 text-center overflow-y-auto">
-                    <div id="karaokeDisplay" class="space-y-6 max-w-3xl w-full">
+                <div id="previewView" class="absolute inset-0 hidden bg-white flex flex-col items-center p-8 text-center overflow-y-auto scroll-container">
+                    <div id="karaokeDisplay" class="space-y-8 max-w-3xl w-full py-20">
                         </div>
                 </div>
             </div>
@@ -140,19 +144,20 @@
         import RegionsPlugin from 'https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.esm.js';
 
         // --- Configuration ---
-        env.allowLocalModels = false; // Force CDN download
+        env.allowLocalModels = false;
         const MODEL_NAME = 'Xenova/whisper-base';
+        
         // --- State ---
         let wavesurfer;
         let wsRegions;
-        let transcriptData = []; // { start, end, text, regionId }
-        let isPlaying = false;
-        let audioBlob = null;
+        let transcriptData = [];
+        let transcriber = null; // Model singleton
 
         // --- DOM Elements ---
         const els = {
             dropZone: document.getElementById('dropZone'),
             fileInput: document.getElementById('fileInput'),
+            selectBtn: document.getElementById('selectBtn'),
             uploadView: document.getElementById('uploadView'),
             workspaceView: document.getElementById('workspaceView'),
             progressContainer: document.getElementById('progressContainer'),
@@ -170,147 +175,141 @@
             exportBtn: document.getElementById('exportBtn')
         };
 
-        // --- Initialization & Event Listeners ---
-        
-        // 1. Drag & Drop
-        els.fileInput.addEventListener('click', (e) => e.stopPropagation()); // <--- ADD THIS LINE
+        // --- Initialization ---
+
+        // File Selection Logic
+        els.selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            els.fileInput.click();
+        });
+
         els.dropZone.addEventListener('click', () => els.fileInput.click());
-        els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); els.dropZone.classList.add('border-brand-orange'); });
-        els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('border-brand-orange'));
+        
+        els.dropZone.addEventListener('dragover', (e) => { 
+            e.preventDefault(); 
+            els.dropZone.classList.add('border-brand-orange', 'bg-orange-50'); 
+        });
+
+        els.dropZone.addEventListener('dragleave', () => {
+            els.dropZone.classList.remove('border-brand-orange', 'bg-orange-50');
+        });
+
         els.dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            els.dropZone.classList.remove('border-brand-orange');
+            els.dropZone.classList.remove('border-brand-orange', 'bg-orange-50');
             if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
         });
+
         els.fileInput.addEventListener('change', (e) => {
             if (e.target.files.length) handleFile(e.target.files[0]);
         });
 
-        // 2. Tabs
+        // Tab Navigation
         els.tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                // UI Toggle
                 els.tabBtns.forEach(b => {
                     b.classList.remove('border-brand-orange', 'text-brand-orange');
                     b.classList.add('border-transparent', 'text-slate-500');
                 });
-                btn.classList.remove('border-transparent', 'text-slate-500');
                 btn.classList.add('border-brand-orange', 'text-brand-orange');
+                btn.classList.remove('border-transparent', 'text-slate-500');
 
-                // View Toggle
-                const target = btn.dataset.tab;
-                if (target === 'editor') {
+                if (btn.dataset.tab === 'editor') {
                     els.editorView.classList.remove('hidden');
                     els.previewView.classList.add('hidden');
                 } else {
                     els.editorView.classList.add('hidden');
                     els.previewView.classList.remove('hidden');
-                    renderPreview(); // Refresh preview text
+                    renderPreview();
                 }
             });
         });
 
-        // 3. Playback
         els.playPauseBtn.addEventListener('click', () => wavesurfer.playPause());
-
-        // 4. Export
         els.exportBtn.addEventListener('click', exportLRC);
 
-
-        // --- Core Logic ---
-
-// Helper to update the bar nicely
-function updateProgress(percent, message, isPulse = false) {
-    els.progressBar.style.width = `${percent}%`;
-    els.percentText.innerText = `${Math.floor(percent)}%`;
-    els.statusText.innerText = message;
-    
-    if (isPulse) {
-        els.progressBar.classList.add('animate-pulse');
-    } else {
-        els.progressBar.classList.remove('animate-pulse');
-    }
-}
-
-async function handleFile(file) {
-    audioBlob = file;
-    
-    // UI: Switch to loading state
-    els.dropZone.classList.add('hidden');
-    els.progressContainer.classList.remove('hidden');
-    
-    try {
-        // Step 1: Initialize Visuals (Waveform)
-        updateProgress(5, "Initializing Waveform...");
-        initWaveSurfer(file);
-
-        // Step 2: Initialize AI (This triggers the Download)
-        // We use a specific callback to track the DOWNLOAD progress
-        const transcriber = await pipeline('automatic-speech-recognition', MODEL_NAME, {
-            progress_callback: (data) => {
-                // 'initiate' means starting a download
-                // 'progress' means downloading a chunk
-                // 'done' means file downloaded
-                
-                if (data.status === 'progress') {
-                    // Check if we are downloading the model files (shard, tokenizer, etc.)
-                    // Map 0-100 progress of download to 10%-90% of our bar
-                    const downloadPct = data.progress; // ranges 0 to 100
-                    const barWidth = 10 + (downloadPct * 0.8); // Scale to fit inside 10-90% range
-                    
-                    updateProgress(barWidth, `Downloading AI Brain... (${Math.floor(downloadPct)}%)`);
-                }
-                if (data.status === 'done') {
-                    updateProgress(90, "AI Model Ready!");
-                }
+        // Spacebar shortcut
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && e.target === document.body) {
+                e.preventDefault();
+                if (wavesurfer) wavesurfer.playPause();
             }
         });
 
-        // Step 3: Prepare Audio (Short pause to let UI render)
-        updateProgress(92, "Reading Audio File...");
-        await new Promise(resolve => setTimeout(resolve, 100)); // Breather
-        
-        const audioData = await readAudio(file);
+        // --- Logic Functions ---
 
-        // Step 4: Transcribe (The "Stuck" Phase)
-        // Since we can't track exact progress of the *thinking*, we switch to Pulse
-        updateProgress(95, "AI is listening... (This freezes your screen)", true);
-        
-        // Another breather before the heavy freeze
-        await new Promise(resolve => setTimeout(resolve, 100));
+        function updateProgress(percent, message, isPulse = false) {
+            els.progressBar.style.width = `${percent}%`;
+            els.percentText.innerText = `${Math.floor(percent)}%`;
+            els.statusText.innerText = message;
+            isPulse ? els.progressBar.classList.add('animate-pulse') : els.progressBar.classList.remove('animate-pulse');
+        }
 
-        const output = await transcriber(audioData, {
-            chunk_length_s: 30,
-            stride_length_s: 5,
-            return_timestamps: true
-        });
+        async function handleFile(file) {
+            // Clean up previous session
+            if (wavesurfer) wavesurfer.destroy();
+            els.transcriptList.innerHTML = '';
+            els.karaokeDisplay.innerHTML = '';
+            els.exportBtn.disabled = true;
 
-        // Step 5: Done
-        updateProgress(100, "Done!", false);
-        
-        // Process Data
-        processTranscription(output);
+            els.dropZone.classList.add('hidden');
+            els.progressContainer.classList.remove('hidden');
+            
+            try {
+                updateProgress(5, "Loading Waveform...");
+                initWaveSurfer(file);
 
-        // Switch UI
-        setTimeout(() => {
-            els.uploadView.classList.add('hidden');
-            els.workspaceView.classList.remove('hidden');
-            els.workspaceView.classList.remove('opacity-0');
-        }, 500);
+                // Initialize AI Model (Once)
+                if (!transcriber) {
+                    transcriber = await pipeline('automatic-speech-recognition', MODEL_NAME, {
+                        progress_callback: (data) => {
+                            if (data.status === 'progress') {
+                                const downloadPct = data.progress;
+                                const barWidth = 10 + (downloadPct * 0.7);
+                                updateProgress(barWidth, `Downloading AI Brain... (${Math.floor(downloadPct)}%)`);
+                            }
+                            if (data.status === 'done') updateProgress(85, "Model Loaded!");
+                        }
+                    });
+                }
 
-    } catch (err) {
-        console.error(err);
-        alert("Error: " + err.message);
-        location.reload();
-    }
-}
+                updateProgress(90, "Reading Audio Data...");
+                const audioData = await readAudio(file);
 
+                updateProgress(95, "AI is transcribing... (This may take a minute)", true);
+                
+                // Allow UI to update before blocking thread
+                await new Promise(r => setTimeout(r, 200));
+
+                const output = await transcriber(audioData, {
+                    chunk_length_s: 30,
+                    stride_length_s: 5,
+                    return_timestamps: true
+                });
+
+                processTranscription(output);
+                
+                updateProgress(100, "Processing Complete!");
+                els.exportBtn.disabled = false;
+
+                setTimeout(() => {
+                    els.uploadView.classList.add('hidden');
+                    els.workspaceView.classList.remove('hidden');
+                    setTimeout(() => els.workspaceView.classList.remove('opacity-0'), 50);
+                }, 600);
+
+            } catch (err) {
+                console.error(err);
+                alert("Error: " + err.message);
+                location.reload();
+            }
+        }
 
         function initWaveSurfer(file) {
             wavesurfer = WaveSurfer.create({
                 container: els.waveform,
-                waveColor: '#fed7aa', // Light orange
-                progressColor: '#ef4444', // Red
+                waveColor: '#fed7aa',
+                progressColor: '#ef4444',
                 cursorColor: '#f97316',
                 barWidth: 2,
                 barRadius: 3,
@@ -323,48 +322,31 @@ async function handleFile(file) {
             wavesurfer.loadBlob(file);
 
             wavesurfer.on('ready', () => {
-                const dur = wavesurfer.getDuration();
-                els.timeDisplay.innerText = `00:00 / ${formatTime(dur)}`;
+                els.timeDisplay.innerText = `00:00 / ${formatTime(wavesurfer.getDuration())}`;
             });
 
-            wavesurfer.on('audioprocess', (currentTime) => {
-                els.timeDisplay.innerText = `${formatTime(currentTime)} / ${formatTime(wavesurfer.getDuration())}`;
-                updatePreviewActiveState(currentTime);
+            wavesurfer.on('audioprocess', (time) => {
+                els.timeDisplay.innerText = `${formatTime(time)} / ${formatTime(wavesurfer.getDuration())}`;
+                updatePreviewActiveState(time);
             });
 
-            wavesurfer.on('play', () => {
-                isPlaying = true;
-                els.playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-            });
+            wavesurfer.on('play', () => els.playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>');
+            wavesurfer.on('pause', () => els.playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>');
 
-            wavesurfer.on('pause', () => {
-                isPlaying = false;
-                els.playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-            });
-
-            // Region Events for Sync
+            // Region Sync
             wsRegions.on('region-updated', (region) => {
                 const index = transcriptData.findIndex(t => t.regionId === region.id);
                 if (index !== -1) {
-                    // 1. Always update the background data
                     transcriptData[index].start = region.start;
                     transcriptData[index].end = region.end;
-
-                    // 2. ONLY update the input box if the change is significant 
-                    // (This prevents the input from resetting while you are typing just 0.01 differences)
-                    const startInput = document.getElementById(`start-${index}`);
-                    const endInput = document.getElementById(`end-${index}`);
                     
-                    if (startInput && Math.abs(parseFloat(startInput.value) - region.start) > 0.1) {
-                        startInput.value = region.start.toFixed(2);
-                    }
-                    if (endInput && Math.abs(parseFloat(endInput.value) - region.end) > 0.1) {
-                        endInput.value = region.end.toFixed(2);
-                    }
+                    const sInp = document.getElementById(`start-${index}`);
+                    const eInp = document.getElementById(`end-${index}`);
+                    if (sInp && Math.abs(parseFloat(sInp.value) - region.start) > 0.05) sInp.value = region.start.toFixed(2);
+                    if (eInp && Math.abs(parseFloat(eInp.value) - region.end) > 0.05) eInp.value = region.end.toFixed(2);
                 }
             });
-            
-            // Click region to play
+
             wsRegions.on('region-clicked', (region, e) => {
                 e.stopPropagation();
                 region.play();
@@ -372,132 +354,75 @@ async function handleFile(file) {
         }
 
         function processTranscription(output) {
-            // Whisper 'chunks' usually contain { text, timestamp: [start, end] }
-            // Note: whisper-tiny sometimes returns null end timestamps for last chunk.
-            
             const chunks = output.chunks || [];
-            
             transcriptData = chunks.map((chunk, i) => {
-                // Safety check for timestamps
                 let start = chunk.timestamp[0];
-                let end = chunk.timestamp[1];
-                
-                if (end === null) end = start + 2.0; // Fallback duration
-
+                let end = chunk.timestamp[1] || start + 2.5;
                 const regionId = `region-${i}`;
 
-                // Create Visual Region
                 wsRegions.addRegion({
                     id: regionId,
                     start: start,
                     end: end,
-                    content: '', // Can add text here if desired
-                    color: 'rgba(249, 115, 22, 0.2)', // Orange transparent
+                    color: 'rgba(249, 115, 22, 0.15)',
                     drag: true,
                     resize: true
                 });
 
-                return {
-                    id: i,
-                    regionId: regionId, // <--- Corrected variable name
-                    start: start,
-                    end: end,
-                    text: chunk.text.trim()
-                };
+                return { id: i, regionId, start, end, text: chunk.text.trim() };
             });
 
             renderEditor();
         }
 
-        // --- Editor UI Logic ---
-
         function renderEditor() {
             els.transcriptList.innerHTML = '';
-            
             transcriptData.forEach((item, index) => {
                 const row = document.createElement('div');
                 row.className = "flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow group";
                 row.innerHTML = `
                     <div class="flex flex-col gap-1 w-24 flex-none">
-                        <input type="number" step="0.1" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-1 text-slate-600 focus:outline-none focus:border-brand-orange" 
-                            id="start-${index}" value="${item.start.toFixed(2)}">
-                        <input type="number" step="0.1" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-1 text-slate-600 focus:outline-none focus:border-brand-orange" 
-                            id="end-${index}" value="${item.end.toFixed(2)}">
+                        <input type="number" step="0.1" id="start-${index}" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-1 text-slate-600 focus:border-brand-orange outline-none" value="${item.start.toFixed(2)}">
+                        <input type="number" step="0.1" id="end-${index}" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-1 text-slate-600 focus:border-brand-orange outline-none" value="${item.end.toFixed(2)}">
                     </div>
                     <div class="flex-1">
-                        <input type="text" class="w-full text-base text-slate-800 font-medium placeholder-slate-300 focus:outline-none border-b border-transparent focus:border-brand-orange pb-1 transition-colors bg-transparent"
-                            id="text-${index}" value="${item.text}">
+                        <input type="text" id="text-${index}" class="w-full text-base text-slate-800 font-medium border-b border-transparent focus:border-brand-orange bg-transparent outline-none pb-1" value="${item.text}">
                     </div>
-                    <button class="w-8 h-8 rounded-full bg-orange-50 text-brand-orange flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-brand-orange hover:text-white"
-                        onclick="window.playSegment('${item.regionId}')">
+                    <button class="w-8 h-8 rounded-full bg-orange-50 text-brand-orange flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-brand-orange hover:text-white transition-all" onclick="window.playSegment('${item.regionId}')">
                         <i class="fa-solid fa-play text-xs"></i>
                     </button>
                 `;
-                
                 els.transcriptList.appendChild(row);
 
-                // Bind Events
-                const startInput = document.getElementById(`start-${index}`);
-                const endInput = document.getElementById(`end-${index}`);
-                const textInput = document.getElementById(`text-${index}`);
+                // Listeners (Direct update to avoid re-rendering whole list and losing focus)
+                const sInp = row.querySelector(`#start-${index}`);
+                const eInp = row.querySelector(`#end-${index}`);
+                const tInp = row.querySelector(`#text-${index}`);
 
-                // Inputs -> Region/Data
-                const updateRegionFromInput = () => {
-                    const s = parseFloat(startInput.value);
-                    const e = parseFloat(endInput.value);
-                    const t = textInput.value;
-
-                    // Update Data
+                const updateRegion = () => {
+                    const s = parseFloat(sInp.value);
+                    const e = parseFloat(eInp.value);
                     transcriptData[index].start = s;
                     transcriptData[index].end = e;
-                    transcriptData[index].text = t;
-
-                    // Update Region
-                    const region = wsRegions.getRegions().find(r => r.id === item.regionId);
-                    if (region) {
-                        region.setOptions({ start: s, end: e });
-                    }
+                    const reg = wsRegions.getRegions().find(r => r.id === item.regionId);
+                    if (reg) reg.setOptions({ start: s, end: e });
                 };
 
-                startInput.addEventListener('change', updateRegionFromInput);
-                endInput.addEventListener('change', updateRegionFromInput);
-                textInput.addEventListener('input', () => {
-                    const val = textInput.value;
-                    transcriptData[index].text = val;
-                    
-                    // Live update the preview element if it exists
-                    const previewEl = document.getElementById(`karaoke-${index}`);
-                    if (previewEl) {
-                        previewEl.innerText = val;
-                    }
-                });
+                sInp.onchange = updateRegion;
+                eInp.onchange = updateRegion;
+                tInp.oninput = (e) => {
+                    transcriptData[index].text = e.target.value;
+                    const prev = document.getElementById(`karaoke-${index}`);
+                    if (prev) prev.innerText = e.target.value;
+                };
             });
         }
-
-        function updateInputRow(index) {
-            const item = transcriptData[index];
-            const startInput = document.getElementById(`start-${index}`);
-            const endInput = document.getElementById(`end-${index}`);
-            
-            if (startInput && endInput) {
-                startInput.value = item.start.toFixed(2);
-                endInput.value = item.end.toFixed(2);
-            }
-        }
-
-        // Global helper for the play button in HTML
-        window.playSegment = (regionId) => {
-            const region = wsRegions.getRegions().find(r => r.id === regionId);
-            if(region) region.play();
-        };
-
-        // --- Preview Logic ---
 
         function renderPreview() {
             els.karaokeDisplay.innerHTML = '';
             transcriptData.forEach((item, index) => {
                 const p = document.createElement('p');
-                p.className = `karaoke-line text-2xl md:text-3xl text-slate-400 font-medium cursor-pointer py-2`;
+                p.className = `karaoke-line text-2xl md:text-4xl text-slate-400 font-semibold cursor-pointer py-4 px-4 rounded-xl hover:bg-slate-50`;
                 p.id = `karaoke-${index}`;
                 p.innerText = item.text;
                 p.onclick = () => {
@@ -508,15 +433,12 @@ async function handleFile(file) {
             });
         }
 
-        function updatePreviewActiveState(currentTime) {
-            // Only update if preview is visible
+        function updatePreviewActiveState(time) {
             if (els.previewView.classList.contains('hidden')) return;
-
             transcriptData.forEach((item, index) => {
                 const el = document.getElementById(`karaoke-${index}`);
                 if (!el) return;
-
-                if (currentTime >= item.start && currentTime <= item.end) {
+                if (time >= item.start && time <= item.end) {
                     if (!el.classList.contains('active')) {
                         el.classList.add('active');
                         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -527,63 +449,42 @@ async function handleFile(file) {
             });
         }
 
-        // --- Utilities ---
+        async function readAudio(file) {
+            const buffer = await file.arrayBuffer();
+            const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const decoded = await ctx.decodeAudioData(buffer);
+            const audio = decoded.getChannelData(0);
+            await ctx.close();
+            return audio;
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60);
+            return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+        }
 
         function exportLRC() {
             let content = '';
             transcriptData.forEach(line => {
-                content += `[${formatTimeLRC(line.start)}]${line.text}\n`;
+                const m = Math.floor(line.start / 60).toString().padStart(2, '0');
+                const s = Math.floor(line.start % 60).toString().padStart(2, '0');
+                const ms = Math.floor((line.start % 1) * 100).toString().padStart(2, '0');
+                content += `[${m}:${s}.${ms}]${line.text}\n`;
             });
-
             const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'lyrics.lrc';
+            a.download = `lyrics.lrc`;
             a.click();
             URL.revokeObjectURL(url);
         }
 
-        // Audio helper for Transformers.js
-        async function readAudio(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    
-    // 1. Decode at native rate first
-    const audioContext = new AudioContext();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-    // 2. Resample to 16000Hz if needed
-    if (audioBuffer.sampleRate === 16000) {
-        const data = audioBuffer.getChannelData(0);
-        audioContext.close(); // Cleanup
-        return data;
-    }
-
-    // Use OfflineAudioContext to resample
-    const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * 16000, 16000);
-    const source = offlineCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineCtx.destination);
-    source.start();
-    
-    const resampledBuffer = await offlineCtx.startRendering();
-    audioContext.close(); // Cleanup original context
-    return resampledBuffer.getChannelData(0);
-}
-
-
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        }
-
-        function formatTimeLRC(seconds) {
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            const ms = Math.floor((seconds % 1) * 100);
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
-        }
+        window.playSegment = (id) => {
+            const r = wsRegions.getRegions().find(reg => reg.id === id);
+            if (r) r.play();
+        };
     </script>
 </body>
 </html>
