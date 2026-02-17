@@ -343,14 +343,23 @@ async function handleFile(file) {
 
             // Region Events for Sync
             wsRegions.on('region-updated', (region) => {
-                // Find data index
                 const index = transcriptData.findIndex(t => t.regionId === region.id);
                 if (index !== -1) {
-                    // Update Data
+                    // 1. Always update the background data
                     transcriptData[index].start = region.start;
                     transcriptData[index].end = region.end;
-                    // Update Input UI
-                    updateInputRow(index);
+
+                    // 2. ONLY update the input box if the change is significant 
+                    // (This prevents the input from resetting while you are typing just 0.01 differences)
+                    const startInput = document.getElementById(`start-${index}`);
+                    const endInput = document.getElementById(`end-${index}`);
+                    
+                    if (startInput && Math.abs(parseFloat(startInput.value) - region.start) > 0.1) {
+                        startInput.value = region.start.toFixed(2);
+                    }
+                    if (endInput && Math.abs(parseFloat(endInput.value) - region.end) > 0.1) {
+                        endInput.value = region.end.toFixed(2);
+                    }
                 }
             });
             
@@ -389,7 +398,7 @@ async function handleFile(file) {
 
                 return {
                     id: i,
-                    regionId: regionId,
+                    regionId: regionId, // <--- Corrected variable name
                     start: start,
                     end: end,
                     text: chunk.text.trim()
@@ -452,7 +461,14 @@ async function handleFile(file) {
                 startInput.addEventListener('change', updateRegionFromInput);
                 endInput.addEventListener('change', updateRegionFromInput);
                 textInput.addEventListener('input', () => {
-                    transcriptData[index].text = textInput.value;
+                    const val = textInput.value;
+                    transcriptData[index].text = val;
+                    
+                    // Live update the preview element if it exists
+                    const previewEl = document.getElementById(`karaoke-${index}`);
+                    if (previewEl) {
+                        previewEl.innerText = val;
+                    }
                 });
             });
         }
@@ -529,11 +545,31 @@ async function handleFile(file) {
 
         // Audio helper for Transformers.js
         async function readAudio(file) {
-            const audioContext = new AudioContext({ sampleRate: 16000 });
-            const arrayBuffer = await file.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            return audioBuffer.getChannelData(0);
-        }
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // 1. Decode at native rate first
+    const audioContext = new AudioContext();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    // 2. Resample to 16000Hz if needed
+    if (audioBuffer.sampleRate === 16000) {
+        const data = audioBuffer.getChannelData(0);
+        audioContext.close(); // Cleanup
+        return data;
+    }
+
+    // Use OfflineAudioContext to resample
+    const offlineCtx = new OfflineAudioContext(1, audioBuffer.duration * 16000, 16000);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start();
+    
+    const resampledBuffer = await offlineCtx.startRendering();
+    audioContext.close(); // Cleanup original context
+    return resampledBuffer.getChannelData(0);
+}
+
 
         function formatTime(seconds) {
             const m = Math.floor(seconds / 60);
